@@ -1,4 +1,4 @@
-## [v1.0.0] - 2026-11-20 [Feature/IMU_data_packet_create]
+## [v1.0.0] - 2026-11-20 [Feature/IMU_data_packet_create(fixed_imu)]
 
 ### Added
 
