@@ -29,10 +29,11 @@ typedef struct
 
 } IMU_Data_t;
 
+
 // Initialize queue and generation task
 bool imu_data_init();
 
 // Receive one sample from queue
-bool imu_data_receive(IMU_Data_t* data);
+bool packet_receive(uint8_t* packet);
 
 #endif

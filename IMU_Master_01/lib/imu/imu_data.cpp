@@ -1,5 +1,6 @@
 
 #include "imu_data.h"
+#include "packet.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -8,17 +9,16 @@
 #include "esp_system.h"
 
 // Configuration
-#define IMU_SAMPLE_INTERVAL   2
-#define IMU_QUEUE_LENGTH      1000
-#define IMU_TASK_STACK_SIZE   4096
-#define IMU_TASK_PRIORITY    5
+#define IMU_SAMPLE_INTERVAL 2
+#define IMU_QUEUE_LENGTH 1000
+#define IMU_TASK_STACK_SIZE 4096
+#define IMU_TASK_PRIORITY 5
 
 // Queue handle
-static QueueHandle_t imu_queue = NULL;
+static QueueHandle_t packet_queue = NULL;
 
-// Message ID counter (4 bytes)
+// Message ID counter
 static uint32_t next_message_id = 0;
-
 
 // Generate random signed 16-bit sensor value
 static int16_t random_sensor_value()
@@ -30,38 +30,29 @@ static int16_t random_sensor_value()
     return (int16_t)value;
 }
 
-
 // Generate random temperature from 20 to 35 degrees Celsius
 static int8_t random_temperature()
 {
     return (int8_t)(20 + (esp_random() % 16));
 }
 
-
 // Generate one complete IMU sample
-static void imu_generate_data(IMU_Data_t* data)
+static void imu_generate_data(IMU_Data_t *data)
 {
-    // Message ID (full 32-bit range)
     data->message_id = next_message_id;
-
     next_message_id++;
 
-
-    // Temperature
     data->temperature = random_temperature();
-
 
     // Accelerometer
     data->accel_x = random_sensor_value();
     data->accel_y = random_sensor_value();
     data->accel_z = random_sensor_value();
 
-
     // Gyroscope
     data->gyro_x = random_sensor_value();
     data->gyro_y = random_sensor_value();
     data->gyro_z = random_sensor_value();
-
 
     // Magnetometer
     data->mag_x = random_sensor_value();
@@ -69,50 +60,46 @@ static void imu_generate_data(IMU_Data_t* data)
     data->mag_z = random_sensor_value();
 }
 
-
-// FreeRTOS task: generate IMU samples
-static void imu_generation_task(void* parameter)
+// FreeRTOS task: generate and queue IMU packets
+static void imu_generation_task(void *parameter)
 {
     IMU_Data_t imu_data;
+    uint8_t packet[PACKET_SIZE];
 
     TickType_t last_wake_time = xTaskGetTickCount();
 
     while (1)
     {
-        // Generate new sample
+        // Generate IMU data
         imu_generate_data(&imu_data);
 
+        // Convert IMU data into a 24-byte packet
+        packet_create(&imu_data, packet);
 
-        // Send sample to queue without waiting
-        if (xQueueSend(imu_queue, &imu_data, 0) != pdPASS)
+        // Send packet to queue without waiting
+        if (xQueueSend(packet_queue, packet, 0) != pdPASS)
         {
-            // Queue is full: sample is dropped
+            // Queue is full: packet is dropped
         }
-
-
         // Wait for next sampling interval
         vTaskDelayUntil(
             &last_wake_time,
-            pdMS_TO_TICKS(IMU_SAMPLE_INTERVAL)
-        );
+            pdMS_TO_TICKS(IMU_SAMPLE_INTERVAL));
     }
 }
 
-
-// Initialize queue and generation task
+// Initialize packet queue and generation task
 bool imu_data_init()
 {
-    // Create queue
-    imu_queue = xQueueCreate(
+    // Create queue: each item is PACKET_SIZE bytes
+    packet_queue = xQueueCreate(
         IMU_QUEUE_LENGTH,
-        sizeof(IMU_Data_t)
-    );
+        PACKET_SIZE);
 
-    if (imu_queue == NULL)
+    if (packet_queue == NULL)
     {
         return false;
     }
-
 
     // Create FreeRTOS task
     BaseType_t result = xTaskCreate(
@@ -121,15 +108,12 @@ bool imu_data_init()
         IMU_TASK_STACK_SIZE,
         NULL,
         IMU_TASK_PRIORITY,
-        NULL
-    );
-
+        NULL);
 
     if (result != pdPASS)
     {
-        vQueueDelete(imu_queue);
-
-        imu_queue = NULL;
+        vQueueDelete(packet_queue);
+        packet_queue = NULL;
 
         return false;
     }
@@ -137,18 +121,16 @@ bool imu_data_init()
     return true;
 }
 
-
-// Receive one sample from queue
-bool imu_data_receive(IMU_Data_t* data)
+// Receive one 24-byte packet from queue
+bool packet_receive(uint8_t *packet)
 {
-    if (imu_queue == NULL || data == NULL)
+    if (packet_queue == NULL || packet == NULL)
     {
         return false;
     }
 
     return xQueueReceive(
-        imu_queue,
-        data,
-        0
-    ) == pdPASS;
+               packet_queue,
+               packet,
+               0) == pdPASS;
 }
