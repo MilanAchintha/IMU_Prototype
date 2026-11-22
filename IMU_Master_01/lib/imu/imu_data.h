@@ -4,6 +4,13 @@
 
 #include <Arduino.h>
 
+// imu_data.h
+
+extern volatile uint32_t generatedCount;
+extern volatile uint32_t sentCount;
+extern volatile uint32_t receivedCount;
+extern volatile uint32_t droppedCount;
+
 typedef struct
 {
     // Message ID (4 bytes)
@@ -35,5 +42,7 @@ bool imu_data_init();
 
 // Receive one sample from queue
 bool packet_receive(uint8_t* packet);
+
+void imu_print_queue_stats();
 
 #endif

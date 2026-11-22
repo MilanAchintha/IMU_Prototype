@@ -2,6 +2,12 @@
 
 ### Added
 
+- Confirm No data Loss when generated data put to queue and read that queue
+
+## [v1.0.0] - 2026-11-20 [Feature/IMU_data_packet_create(fixed_imu)]
+
+### Added
+
 - Sucessfuuly done packet creation
 - Build and Flash Sucsesfull
 - fixed value with check packet creation in main.cpp

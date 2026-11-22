@@ -14,6 +14,11 @@
 #define IMU_TASK_STACK_SIZE 4096
 #define IMU_TASK_PRIORITY 5
 
+volatile uint32_t generatedCount = 0;
+volatile uint32_t sentCount = 0;
+volatile uint32_t receivedCount = 0;
+volatile uint32_t droppedCount = 0;
+
 // Queue handle
 static QueueHandle_t packet_queue = NULL;
 
@@ -72,14 +77,19 @@ static void imu_generation_task(void *parameter)
     {
         // Generate IMU data
         imu_generate_data(&imu_data);
+        generatedCount++;
 
         // Convert IMU data into a 24-byte packet
         packet_create(&imu_data, packet);
 
         // Send packet to queue without waiting
-        if (xQueueSend(packet_queue, packet, 0) != pdPASS)
+        if (xQueueSend(packet_queue, packet, 0) ==  pdPASS)
         {
-            // Queue is full: packet is dropped
+            sentCount++;
+        }
+        else
+        {
+            droppedCount++;
         }
         // Wait for next sampling interval
         vTaskDelayUntil(
@@ -96,11 +106,6 @@ bool imu_data_init()
         IMU_QUEUE_LENGTH,
         PACKET_SIZE);
 
-    if (packet_queue == NULL)
-    {
-        return false;
-    }
-
     // Create FreeRTOS task
     BaseType_t result = xTaskCreate(
         imu_generation_task,
@@ -110,27 +115,16 @@ bool imu_data_init()
         IMU_TASK_PRIORITY,
         NULL);
 
-    if (result != pdPASS)
-    {
-        vQueueDelete(packet_queue);
-        packet_queue = NULL;
-
-        return false;
-    }
-
     return true;
 }
 
-// Receive one 24-byte packet from queue
 bool packet_receive(uint8_t *packet)
 {
-    if (packet_queue == NULL || packet == NULL)
+    if (xQueueReceive(packet_queue, packet, 0) == pdPASS)
     {
-        return false;
+        receivedCount++;
+        return true;
     }
 
-    return xQueueReceive(
-               packet_queue,
-               packet,
-               0) == pdPASS;
+    return false;
 }
