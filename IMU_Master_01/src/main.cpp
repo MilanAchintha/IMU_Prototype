@@ -31,15 +31,12 @@ void setup()
         }
     }
 
-    // 2. Connect ESP32 to Wi-Fi
     wifi_init();
 
     wifi_print_ip();
 
-    // 3. Initialize WebSocket client
-    // websocket_init(SERVER_IP, SERVER_PORT);
+    websocket_init(SERVER_IP, SERVER_PORT);
 
-    Serial.println("System initialized!");
 }
 
 // void loop()
