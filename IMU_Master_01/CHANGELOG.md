@@ -2,7 +2,8 @@
 
 ### Added
 
-- 
+- but maximum 50 packet loss
+- Sucessfully sent over wifi with no siginificant packet loss
 
 ## [v1.0.0] - 2026-11-20 [Feature/IMU_data_packet_create(fixed_imu)]
 
