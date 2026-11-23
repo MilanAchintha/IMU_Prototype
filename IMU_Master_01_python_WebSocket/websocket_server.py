@@ -57,11 +57,13 @@ def process_packet(packet):
 
     if last_id is None:
 
-        # First packet received.
-        # Establish the starting sequence number.
-        # Do not count earlier message IDs as lost.
+        # ESP32 starts message IDs from zero after reset.
+        if message_id > 0:
+            stats["missing"] += message_id
+
         stats["last_message_id"] = message_id
-        return device_id, message_id
+
+        return device_id, message_id        
 
     else:
 

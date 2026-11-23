@@ -1,3 +1,9 @@
+## [v1.0.0] - 2026-11-23 [Feature/more_implement_send_packet_over_wifi]
+
+### Added
+
+- Sucessfully send one device id with data packets to websocket and no data loss
+
 ## [v1.0.0] - 2026-11-22 [Feature/send_packet_over_wifi]
 
 ### Added
