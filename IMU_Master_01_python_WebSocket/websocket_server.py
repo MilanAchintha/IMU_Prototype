@@ -1,97 +1,196 @@
 
-# import asyncio
-# import websockets
-
-# async def handle_client(websocket):
-#     print("ESP32 connected!")
-
-#     try:
-#         async for message in websocket:
-
-#             print("Received from ESP32:", message)
-
-#             # Send a reply to ESP32
-#             await websocket.send("Hello from Python!")
-
-#     except websockets.exceptions.ConnectionClosed:
-#         print("ESP32 disconnected")
-
-
-# async def main():
-
-#     print("WebSocket server starting...")
-
-#     async with websockets.serve(
-#         handle_client,
-#         "0.0.0.0",
-#         8080
-#     ):
-#         print("WebSocket server running on port 8080")
-
-#         await asyncio.Future()
-
-
-# asyncio.run(main())
-
-
-
 import asyncio
 import websockets
-import struct
 
-async def handle_client(websocket):
+# =====================================
+# CONFIGURATION
+# =====================================
 
-    print("ESP32 connected!")
+HOST = "0.0.0.0"
+PORT = 8080
 
-    async for packet in websocket:
+PACKET_SIZE = 24
+BATCH_SIZE = 100
 
-        # Check packet size
-        if len(packet) != 24:
-            print("Invalid packet size:", len(packet))
-            continue
+EXPECTED_BATCH_SIZE = PACKET_SIZE * BATCH_SIZE
 
-        # Device ID: 1 byte
-        device_id = packet[0]
+# Track statistics separately for each device
+device_stats = {}
 
-        # Message ID: 4 bytes (Little Endian)
-        message_id = struct.unpack_from("<I", packet, 1)[0]
 
-        # Temperature: 1 signed byte
-        temperature = struct.unpack_from("<b", packet, 5)[0]
+def get_device_stats(device_id):
 
-        # Accelerometer, Gyroscope, Magnetometer:
-        # 9 signed 16-bit values
-        sensor_values = struct.unpack_from("<9h", packet, 6)
+    if device_id not in device_stats:
 
-        accel_x, accel_y, accel_z = sensor_values[0:3]
+        device_stats[device_id] = {
+            "received": 0,
+            "missing": 0,
+            "duplicates": 0,
+            "out_of_order": 0,
+            "last_message_id": None
+        }
 
-        gyro_x, gyro_y, gyro_z = sensor_values[3:6]
+    return device_stats[device_id]
 
-        mag_x, mag_y, mag_z = sensor_values[6:9]
 
-        print("\n----- RECEIVED IMU DATA -----")
+def process_packet(packet):
 
-        print("Device ID:", device_id)
-        print("Message ID:", message_id)
-        print("Temperature:", temperature)
+    if len(packet) != PACKET_SIZE:
+        print("Invalid packet size:", len(packet))
+        return
 
-        print("Accelerometer:", accel_x, accel_y, accel_z)
-        print("Gyroscope:", gyro_x, gyro_y, gyro_z)
-        print("Magnetometer:", mag_x, mag_y, mag_z)
+    # Extract device ID
+    device_id = packet[0]
 
-        print("-----------------------------")
+    # Extract 4-byte message ID (little-endian)
+    message_id = int.from_bytes(
+        packet[1:5],
+        byteorder="little",
+        signed=False
+    )
+
+    stats = get_device_stats(device_id)
+
+    stats["received"] += 1
+
+    last_id = stats["last_message_id"]
+
+    if last_id is None:
+
+        # First packet received.
+        # Establish the starting sequence number.
+        # Do not count earlier message IDs as lost.
+        stats["last_message_id"] = message_id
+        return device_id, message_id
+
+    else:
+
+        expected_id = (last_id + 1) & 0xFFFFFFFF
+
+        if message_id == expected_id:
+            pass
+
+        elif message_id == last_id:
+            stats["duplicates"] += 1
+
+        elif ((message_id - expected_id) & 0xFFFFFFFF) < 0x80000000:
+
+            # Forward sequence gap
+            missing_count = (
+                message_id - expected_id
+            ) & 0xFFFFFFFF
+
+            stats["missing"] += missing_count
+
+        else:
+
+            # Older or out-of-order packet
+            stats["out_of_order"] += 1
+
+    # Keep the latest observed message ID
+    if last_id is None or (
+        ((message_id - last_id) & 0xFFFFFFFF) < 0x80000000
+        and message_id != last_id
+    ):
+        stats["last_message_id"] = message_id
+
+    return device_id, message_id
+
+
+def print_statistics():
+
+    print("\n========== DATA LOSS STATISTICS ==========")
+
+    for device_id, stats in device_stats.items():
+
+        print(f"\nDevice ID             : {device_id}")
+        print(f"Packets received      : {stats['received']}")
+        print(f"Missing packets       : {stats['missing']}")
+        print(f"Duplicate packets     : {stats['duplicates']}")
+        print(f"Out-of-order packets  : {stats['out_of_order']}")
+
+    print("==========================================\n")
+
+
+async def websocket_handler(websocket):
+
+    client_address = websocket.remote_address
+
+    print("\nWebSocket client connected:", client_address)
+
+    try:
+
+        async for message in websocket:
+
+            # We expect binary messages
+            if not isinstance(message, bytes):
+                print("Received non-binary message")
+                continue
+
+            received_size = len(message)
+
+            # Check batch size
+            if received_size != EXPECTED_BATCH_SIZE:
+
+                print(
+                    f"INVALID BATCH SIZE: "
+                    f"Expected {EXPECTED_BATCH_SIZE} bytes, "
+                    f"Received {received_size} bytes"
+                )
+
+                continue
+
+            print(
+                f"\nReceived batch: {received_size} bytes "
+                f"({BATCH_SIZE} packets)"
+            )
+
+            # Process all 100 packets
+            for i in range(BATCH_SIZE):
+
+                start = i * PACKET_SIZE
+                end = start + PACKET_SIZE
+
+                packet = message[start:end]
+
+                result = process_packet(packet)
+
+                if result is not None:
+
+                    device_id, message_id = result
+
+                    print(
+                        f"Device: {device_id} | "
+                        f"Message ID: {message_id}"
+                    )
+
+            # Print statistics after each batch
+            print_statistics()
+
+    except websockets.exceptions.ConnectionClosed:
+        print("WebSocket client disconnected:", client_address)
 
 
 async def main():
 
+    print("Starting WebSocket server...")
+    print("Listening on:", HOST, PORT)
+    print("Packet size:", PACKET_SIZE)
+    print("Batch size:", BATCH_SIZE)
+    print("Expected message size:", EXPECTED_BATCH_SIZE)
+
     async with websockets.serve(
-        handle_client,
-        "0.0.0.0",
-        8080
+        websocket_handler,
+        HOST,
+        PORT,
+        max_size=EXPECTED_BATCH_SIZE
     ):
-        print("WebSocket server started on port 8080")
+
+        print("\nWaiting for ESP32 connection...")
 
         await asyncio.Future()
 
 
-asyncio.run(main())
+if __name__ == "__main__":
+
+    asyncio.run(main())

@@ -64,10 +64,20 @@ void websocket_send(const char* message)
     }
 }
 
-void websocket_send_binary(uint8_t* data, size_t length)
+// void websocket_send_binary(uint8_t* data, size_t length)
+// {
+//     if (ws.isConnected())
+//     {
+//         ws.sendBIN(data, length);
+//     }
+// }
+
+bool websocket_send_binary(uint8_t* data, size_t length)
 {
     if (ws.isConnected())
     {
-        ws.sendBIN(data, length);
+        return ws.sendBIN(data, length);
     }
+
+    return false;
 }

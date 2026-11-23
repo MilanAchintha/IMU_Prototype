@@ -12,6 +12,5 @@ bool websocket_is_connected();
 void websocket_send(const char* message);
 
 // Send binary data
-void websocket_send_binary(uint8_t* data, size_t length);
-
+bool websocket_send_binary(uint8_t* data, size_t length);
 #endif
