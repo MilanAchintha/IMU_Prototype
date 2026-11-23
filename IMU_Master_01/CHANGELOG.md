@@ -1,3 +1,9 @@
+## [v1.0.0] - 2026-11-23 [Feature/multiple_device_add]
+
+### Added
+
+- Two Esp32  send data without loss and Receive that data to server successfully.
+
 ## [v1.0.0] - 2026-11-23 [Feature/more_implement_send_packet_over_wifi]
 
 ### Added
