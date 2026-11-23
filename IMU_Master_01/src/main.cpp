@@ -37,7 +37,7 @@ void setup()
     wifi_print_ip();
 
     // 3. Initialize WebSocket client
-    websocket_init(SERVER_IP, SERVER_PORT);
+    // websocket_init(SERVER_IP, SERVER_PORT);
 
     Serial.println("System initialized!");
 }
@@ -106,18 +106,18 @@ void setup()
 void loop()
 {
     // Store 100 packets in one batch
-    static uint8_t batch_buffer[PACKET_SIZE * 100]; // static uint8_t batch_buffer[2400];
+    // static uint8_t batch_buffer[PACKET_SIZE * 100]; // static uint8_t batch_buffer[2400];
 
-    // Number of packets collected so far
-    static uint16_t batch_count = 0;
+    // // Number of packets collected so far
+    // static uint16_t batch_count = 0;
 
     uint8_t packet[PACKET_SIZE];
 
-    // Maintain WebSocket connection
-    websocket_loop();
+    // // Maintain WebSocket connection
+    // websocket_loop();
 
-    if (websocket_is_connected())
-    {
+    // if (websocket_is_connected())
+    // {
         // Receive packets from FreeRTOS queue
         while (packet_receive(packet))
         {
@@ -155,7 +155,7 @@ void loop()
             //     batch_count = 0;
             // }
         }
-    }
+    // }
 
     // Print statistics every 1 second
     static unsigned long lastPrint = 0;
