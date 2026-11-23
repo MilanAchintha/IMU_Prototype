@@ -1,3 +1,10 @@
+## [v1.0.0] - 2026-11-23 [Feature/multiple-device-save-to-csv-message-id]
+
+### Added
+
+- save two excel sheet for both devices
+- Confirm No data Loss
+
 ## [v1.0.0] - 2026-11-23 [Feature/multiple_device_add]
 
 ### Added
