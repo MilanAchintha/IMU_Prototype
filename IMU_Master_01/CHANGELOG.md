@@ -1,3 +1,9 @@
+## [v1.0.0] - 2026-11-23 [Feature/multiple-device-save-to-csv-message-id]
+
+### Added
+
+- 
+
 ## [v1.0.0] - 2026-11-23 [Feature/multiple_device_add]
 
 ### Added

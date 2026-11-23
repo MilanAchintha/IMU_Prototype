@@ -1,6 +1,10 @@
 
 import asyncio
 import websockets
+import os
+
+from openpyxl import Workbook
+
 
 # =====================================
 # CONFIGURATION
@@ -14,16 +18,82 @@ BATCH_SIZE = 100
 
 EXPECTED_BATCH_SIZE = PACKET_SIZE * BATCH_SIZE
 
-# Statistics for each ESP32 device
-device_stats = {}
+EXCEL_SAVE_INTERVAL = 5
 
-# Track connected ESP32 clients
-connected_clients = set()
+
+# =====================================
+# CREATE TWO EXCEL WORKBOOKS
+# =====================================
+
+device_workbooks = {}
+
+HEADERS = [
+    "No.",
+    "Message ID",
+    "Status",
+    "Missing Count"
+]
+
+
+def create_device_workbook(device_id):
+
+    workbook = Workbook()
+
+    sheet = workbook.active
+    sheet.title = f"Device_{device_id}"
+
+    sheet.append(HEADERS)
+
+    device_workbooks[device_id] = workbook
+
+    return workbook
+
+
+# Create both workbooks immediately
+create_device_workbook(1)
+create_device_workbook(2)
+
+
+# =====================================
+# SAVE EXCEL FILE
+# =====================================
+
+def save_device_excel(device_id):
+
+    filename = f"Device_{device_id}_message_ids.xlsx"
+
+    try:
+
+        device_workbooks[device_id].save(filename)
+
+        print(f"Device {device_id} Excel saved: {filename}")
+
+    except PermissionError:
+
+        print(f"ERROR: Close {filename} in Excel before saving.")
+
+    except Exception as error:
+
+        print(f"Device {device_id} save error:", error)
+
+
+def save_all_excel_files():
+
+    print("\n========== SAVING EXCEL FILES ==========")
+
+    for device_id in (1, 2):
+
+        save_device_excel(device_id)
+
+    print("========================================\n")
 
 
 # =====================================
 # DEVICE STATISTICS
 # =====================================
+
+device_stats = {}
+
 
 def get_device_stats(device_id):
 
@@ -42,19 +112,23 @@ def get_device_stats(device_id):
 
 
 # =====================================
-# PROCESS ONE PACKET
+# PROCESS PACKET
 # =====================================
 
 def process_packet(packet):
 
     if len(packet) != PACKET_SIZE:
         print("Invalid packet size:", len(packet))
-        return
+        return None
 
-    # Extract Device ID
+    # Device ID
     device_id = packet[0]
 
-    # Extract Message ID (4 bytes, little-endian)
+    if device_id not in (1, 2):
+        print("Unknown Device ID:", device_id)
+        return None
+
+    # Message ID (4 bytes, little-endian)
     message_id = int.from_bytes(
         packet[1:5],
         byteorder="little",
@@ -67,52 +141,79 @@ def process_packet(packet):
 
     last_id = stats["last_message_id"]
 
-    # First packet from this device
+    status = "OK"
+    missing_count = 0
+
+    # =====================================
+    # CHECK MESSAGE ID
+    # =====================================
+
     if last_id is None:
 
-        # Assumes message IDs start at zero
-        if message_id > 0:
-            stats["missing"] += message_id
+        if message_id == 0:
+            status = "FIRST"
+
+        else:
+            status = "MISSING"
+            missing_count = message_id
+            stats["missing"] += missing_count
 
         stats["last_message_id"] = message_id
-
-        return device_id, message_id
-
-    # Calculate expected next message ID
-    expected_id = (last_id + 1) & 0xFFFFFFFF
-
-    if message_id == expected_id:
-
-        # Correct sequence
-        pass
-
-    elif message_id == last_id:
-
-        # Duplicate packet
-        stats["duplicates"] += 1
-
-    elif ((message_id - expected_id) & 0xFFFFFFFF) < 0x80000000:
-
-        # Missing packets
-        missing_count = (
-            message_id - expected_id
-        ) & 0xFFFFFFFF
-
-        stats["missing"] += missing_count
 
     else:
 
-        # Older or out-of-order packet
-        stats["out_of_order"] += 1
+        expected_id = (last_id + 1) & 0xFFFFFFFF
 
-    # Update latest message ID only for newer packets
-    if (
-        message_id != last_id
-        and ((message_id - last_id) & 0xFFFFFFFF) < 0x80000000
-    ):
-        stats["last_message_id"] = message_id
+        if message_id == expected_id:
 
-    return device_id, message_id
+            status = "OK"
+
+        elif message_id == last_id:
+
+            status = "DUPLICATE"
+            stats["duplicates"] += 1
+
+        elif ((message_id - expected_id) & 0xFFFFFFFF) < 0x80000000:
+
+            missing_count = (
+                message_id - expected_id
+            ) & 0xFFFFFFFF
+
+            status = "MISSING"
+            stats["missing"] += missing_count
+
+            stats["last_message_id"] = message_id
+
+        else:
+
+            status = "OUT_OF_ORDER"
+            stats["out_of_order"] += 1
+
+        if (
+            message_id != last_id
+            and ((message_id - last_id) & 0xFFFFFFFF) < 0x80000000
+        ):
+
+            stats["last_message_id"] = message_id
+
+    # =====================================
+    # WRITE TO CORRECT EXCEL FILE
+    # =====================================
+
+    workbook = device_workbooks[device_id]
+
+    sheet = workbook[f"Device_{device_id}"]
+
+    row_number = sheet.max_row
+
+    sheet.append([
+        row_number,
+        message_id,
+        status,
+        missing_count
+    ])
+
+    return device_id
 
 
 # =====================================
@@ -123,12 +224,9 @@ def print_statistics():
 
     print("\n========== DATA LOSS STATISTICS ==========")
 
-    total_received = 0
-    total_missing = 0
-    total_duplicates = 0
-    total_out_of_order = 0
+    for device_id in (1, 2):
 
-    for device_id, stats in sorted(device_stats.items()):
+        stats = get_device_stats(device_id)
 
         print(f"\nDevice ID             : {device_id}")
         print(f"Packets received      : {stats['received']}")
@@ -138,67 +236,62 @@ def print_statistics():
         print(f"Batches received      : {stats['batches_received']}")
         print(f"Last message ID       : {stats['last_message_id']}")
 
-        total_received += stats["received"]
-        total_missing += stats["missing"]
-        total_duplicates += stats["duplicates"]
-        total_out_of_order += stats["out_of_order"]
-
-    print("\n---------- TOTAL STATISTICS ----------")
-
-    print(f"Total packets received     : {total_received}")
-    print(f"Total missing packets      : {total_missing}")
-    print(f"Total duplicate packets    : {total_duplicates}")
-    print(f"Total out-of-order packets : {total_out_of_order}")
-
     print("==========================================\n")
 
 
 # =====================================
-# WEBSOCKET CLIENT HANDLER
+# AUTOMATIC EXCEL SAVING
+# =====================================
+
+async def periodic_excel_save():
+
+    while True:
+
+        await asyncio.sleep(EXCEL_SAVE_INTERVAL)
+
+        print("\nAutomatic Excel save...")
+
+        save_all_excel_files()
+
+
+# =====================================
+# WEBSOCKET HANDLER
 # =====================================
 
 async def websocket_handler(websocket):
 
     client_address = websocket.remote_address
 
-    connected_clients.add(client_address)
+    connection_devices = set()
 
     print("\n======================================")
-    print("ESP32 WebSocket client connected")
+    print("ESP32 CONNECTED")
     print("Client address:", client_address)
-    print("Connected clients:", len(connected_clients))
     print("======================================")
 
     try:
 
         async for message in websocket:
 
-            # Expect binary data
             if not isinstance(message, bytes):
 
                 print("Received non-binary message")
                 continue
 
-            received_size = len(message)
-
-            # Validate batch size
-            if received_size != EXPECTED_BATCH_SIZE:
+            if len(message) != EXPECTED_BATCH_SIZE:
 
                 print(
-                    f"INVALID BATCH SIZE: "
-                    f"Expected {EXPECTED_BATCH_SIZE} bytes, "
-                    f"Received {received_size} bytes"
+                    "INVALID BATCH SIZE:",
+                    len(message),
+                    "Expected:",
+                    EXPECTED_BATCH_SIZE
                 )
 
                 continue
 
-            # One complete batch received
-            print(
-                f"\nReceived batch: {received_size} bytes "
-                f"({BATCH_SIZE} packets)"
-            )
+            batch_devices = set()
 
-            # Process 100 packets
+            # Process all 100 packets
             for i in range(BATCH_SIZE):
 
                 start = i * PACKET_SIZE
@@ -206,24 +299,25 @@ async def websocket_handler(websocket):
 
                 packet = message[start:end]
 
-                result = process_packet(packet)
+                device_id = process_packet(packet)
 
-                if result is not None:
+                if device_id is not None:
 
-                    device_id, message_id = result
+                    batch_devices.add(device_id)
+                    connection_devices.add(device_id)
 
-                    print(
-                        f"Device ID: {device_id} | "
-                        f"Message ID: {message_id}"
-                    )
+            # Update batch count
+            for device_id in batch_devices:
 
-            # Identify device from first packet in batch
-            device_id = message[0]
+                stats = get_device_stats(device_id)
 
-            stats = get_device_stats(device_id)
-            stats["batches_received"] += 1
+                stats["batches_received"] += 1
 
-            # Print updated statistics
+                print(
+                    f"Received {BATCH_SIZE} packets "
+                    f"from Device {device_id}"
+                )
+
             print_statistics()
 
     except websockets.exceptions.ConnectionClosed:
@@ -232,9 +326,12 @@ async def websocket_handler(websocket):
 
     finally:
 
-        connected_clients.discard(client_address)
+        print("\nESP32 DISCONNECTED:", client_address)
 
-        print("Connected clients:", len(connected_clients))
+        # Save the files belonging to this connection
+        for device_id in connection_devices:
+
+            save_device_excel(device_id)
 
 
 # =====================================
@@ -247,22 +344,46 @@ async def main():
     print(" MULTI-ESP32 WEBSOCKET SERVER")
     print("======================================")
 
-    print("Server IP       : 0.0.0.0")
+    print("Server IP       :", HOST)
     print("Server Port     :", PORT)
-    print("Packet Size     :", PACKET_SIZE, "bytes")
-    print("Batch Size      :", BATCH_SIZE, "packets")
-    print("Expected Batch  :", EXPECTED_BATCH_SIZE, "bytes")
+    print("Packet Size     :", PACKET_SIZE)
+    print("Batch Size      :", BATCH_SIZE)
+    print("Expected Batch  :", EXPECTED_BATCH_SIZE)
+
+    print("\nExcel save interval:", EXCEL_SAVE_INTERVAL, "seconds")
+    print("Excel folder:", os.getcwd())
+
+    # Create both Excel files immediately
+    save_all_excel_files()
+
+    # Start automatic saving
+    save_task = asyncio.create_task(periodic_excel_save())
 
     print("\nWaiting for ESP32 devices...")
 
-    async with websockets.serve(
-        websocket_handler,
-        HOST,
-        PORT,
-        max_size=EXPECTED_BATCH_SIZE
-    ):
+    try:
 
-        await asyncio.Future()
+        async with websockets.serve(
+            websocket_handler,
+            HOST,
+            PORT,
+            max_size=EXPECTED_BATCH_SIZE
+        ):
+
+            await asyncio.Future()
+
+    finally:
+
+        save_task.cancel()
+
+        try:
+            await save_task
+        except asyncio.CancelledError:
+            pass
+
+        print("\nStopping server...")
+
+        save_all_excel_files()
 
 
 # =====================================
@@ -272,9 +393,9 @@ async def main():
 if __name__ == "__main__":
 
     try:
+
         asyncio.run(main())
 
     except KeyboardInterrupt:
 
         print("\nServer stopped by user.")
-
