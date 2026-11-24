@@ -1,106 +1,64 @@
-#include <Arduino.h>
 
-#include "imu_data.h"
-#include "packet.h"
-#include "wifi_manager.h"
-#include "websocket_client.h"
+#include <WiFi.h>
+#include <esp_wifi.h>
 
-uint32_t successful_batches = 0;
-uint32_t failed_batches = 0;
-uint32_t successful_packets = 0;
+// Wi-Fi credentials
+const char* ssid = "MAB";
+const char* password = "1234567890";
 
-// Laptop's Wi-Fi IPv4 address
-#define SERVER_IP "192.168.43.19"
+String receivedCommand = "";
 
-#define SERVER_PORT 8080
+void readTSF()
+{
+    uint64_t tsf_time = esp_wifi_get_tsf_time(WIFI_IF_STA);
+
+    Serial.println("--------- TSF TIME ---------");
+
+    Serial.print("TSF: ");
+    Serial.print((unsigned long long)tsf_time);
+    Serial.println(" us");
+
+    Serial.println("----------------------------");
+}
 
 void setup()
 {
     Serial.begin(115200);
 
-    delay(1000);
+    // Connect to Wi-Fi
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(ssid, password);
 
-    wifi_init();
-    wifi_print_ip();
+    Serial.print("Connecting to WiFi");
 
-    websocket_init(SERVER_IP, SERVER_PORT);
+    while (WiFi.status() != WL_CONNECTED)
+    {
+        delay(500);
+        Serial.print(".");
+    }
 
-    imu_data_init();
+    Serial.println();
+    Serial.println("WiFi Connected");
+
+    Serial.print("ESP32 IP: ");
+    Serial.println(WiFi.localIP());
+
+    Serial.println("Waiting for START command...");
 }
 
 void loop()
 {
-    // Store 100 packets in one batch
-    static uint8_t batch_buffer[PACKET_SIZE * 100]; // static uint8_t batch_buffer[2400];
-
-    // Number of packets collected so far
-    static uint16_t batch_count = 0;
-
-    uint8_t packet[PACKET_SIZE];
-
-    // Maintain WebSocket connection
-    websocket_loop();
-
-    if (websocket_is_connected())
+    // Check for incoming Serial data
+    if (Serial.available())
     {
-        // Receive packets from FreeRTOS queue
-        while (packet_receive(packet))
+        receivedCommand = Serial.readStringUntil('\n');
+        receivedCommand.trim();
+
+        if (receivedCommand == "START")
         {
-            // Calculate the position to store this packet
-            uint16_t offset = batch_count * PACKET_SIZE;
+            Serial.println("START command received!");
 
-            // Copy 24-byte packet into batch buffer
-            memcpy(
-                &batch_buffer[offset],
-                packet,
-                PACKET_SIZE);
-
-            // Increase collected packet count
-            batch_count++;
-
-            // Check whether 100 packets have been collected
-            if (batch_count >= 100)
-            {
-                // Send all 100 packets together
-                if (websocket_send_binary(
-                        batch_buffer,
-                        sizeof(batch_buffer)))
-                {
-                    // Serial.println("100 packets sent!");
-                    successful_batches++;
-                    successful_packets += 100;
-                }
-                else
-                {
-                    // Serial.println("Batch send failed!");
-                    failed_batches++;
-                }
-
-                // Reset batch counter
-                batch_count = 0;
-            }
+            readTSF();
         }
     }
-
-    // Print statistics every 1 second
-    static unsigned long lastPrint = 0;
-
-    if (millis() - lastPrint >= 1000)
-    {
-        Serial.println("\n--- DATA STATISTICS ---");
-
-        Serial.printf("Generated : %lu\n", (unsigned long)generatedCount);
-        Serial.printf("Queue Sent: %lu\n", (unsigned long)sentCount);
-        Serial.printf("Received  : %lu\n", (unsigned long)receivedCount);
-        Serial.printf("Dropped   : %lu\n", (unsigned long)droppedCount);
-        Serial.printf("Successful batches : %lu\n", (unsigned long)successful_batches);
-        Serial.printf("Failed batches     : %lu\n", (unsigned long)failed_batches);
-        Serial.printf("Successful packets : %lu\n", (unsigned long)successful_packets);
-
-        Serial.println("-----------------------");
-
-        lastPrint = millis();
-    }
-
-    delay(1);
 }
