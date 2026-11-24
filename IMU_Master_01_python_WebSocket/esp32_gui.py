@@ -4,121 +4,290 @@ import tkinter as tk
 import threading
 import queue
 
-# Serial configuration
-esp32 = serial.Serial("COM5", 115200, timeout=0.2)
 
-# Queue for received serial messages
+# ==========================================================
+# 1. SERIAL CONFIGURATION
+# ==========================================================
+
+# Change COM5 to the actual COM port of your ESP32 master.
+# timeout=0.2 means the serial read operation waits up to
+# 0.2 seconds before returning if no data is available.
+
+esp32 = serial.Serial(
+    port="COM5",
+    baudrate=115200,
+    timeout=0.2
+)
+
+
+# Queue used to transfer received serial messages
+# from the background thread to the GUI thread.
+
 serial_queue = queue.Queue()
 
 
-# Background thread: receive data from ESP32
+# ==========================================================
+# 2. FUTURE TSF CALCULATION
+# ==========================================================
+
+def calculate_future_tsf(received_tsf):
+
+    # Set how far into the future we want to schedule an event.
+    delay_seconds = 5
+
+    # Convert seconds into microseconds.
+    # TSF timestamps are measured in microseconds.
+    delay_us = delay_seconds * 1_000_000
+
+    # Calculate the future TSF timestamp.
+    future_tsf = received_tsf + delay_us
+
+    # Print the calculation results in the terminal.
+    print("\n========== FUTURE TSF ==========")
+
+    print("Received TSF :", received_tsf, "us")
+
+    print("Delay        :", delay_seconds, "seconds")
+
+    print("Future TSF   :", future_tsf, "us")
+
+    print("================================\n")
+
+    return future_tsf
+
+
+# ==========================================================
+# 3. BACKGROUND SERIAL RECEIVER THREAD
+# ==========================================================
+
 def serial_receiver():
 
+    # Continue receiving while the serial connection is open.
     while esp32.is_open:
 
         try:
-            if esp32.in_waiting:
-                data = esp32.readline().decode("utf-8", errors="replace").strip()
 
+            # Check whether data is available from the ESP32.
+            if esp32.in_waiting:
+
+                # Read one complete line from the ESP32.
+                data = esp32.readline().decode(
+                    "utf-8",
+                    errors="replace"
+                ).strip()
+
+                # Put received messages into the queue.
                 if data:
                     serial_queue.put(data)
 
         except serial.SerialException:
+
+            print("Serial connection error!")
             break
 
 
-# START button function
+# ==========================================================
+# 4. START BUTTON FUNCTION
+# ==========================================================
+
 def start_button_clicked():
 
-    esp32.write(b"START\n")
+    try:
 
-    status_label.config(text="START command sent!")
-    tsf_label.config(text="Waiting for TSF...")
+        # Send START command to the ESP32 master.
+        esp32.write(b"START\n")
+
+        # Update GUI status.
+        status_label.config(text="START command sent!")
+
+        # Clear previous TSF display.
+        tsf_label.config(text="Received TSF: Waiting...")
+
+        future_label.config(text="Future TSF: Waiting...")
+
+        print("START command sent to ESP32 master.")
+
+    except serial.SerialException:
+
+        status_label.config(text="Serial communication error!")
 
 
-# Read received messages and update GUI
+# ==========================================================
+# 5. PROCESS RECEIVED SERIAL MESSAGES
+# ==========================================================
+
 def update_gui():
 
+    # Process all messages currently waiting in the queue.
     while not serial_queue.empty():
 
         message = serial_queue.get()
 
-        # Print received message in terminal
+        # Print every received message in the terminal.
         print("ESP32:", message)
 
-        # Check whether the message contains TSF
+        # Check whether the message contains a TSF timestamp.
         if message.startswith("TSF:"):
 
-            tsf_value = message.replace("TSF:", "").strip()
+            try:
 
-            tsf_label.config(text=f"TSF: {tsf_value}")
+                # Remove TSF: and us from the received message.
+                tsf_value = message.replace("TSF:", "")
+                tsf_value = tsf_value.replace("us", "").strip()
 
-            status_label.config(text="TSF received successfully!")
+                # Convert the TSF string into an integer.
+                received_tsf = int(tsf_value)
 
-    # Check again after 50 ms
+                # Calculate the future TSF timestamp.
+                future_tsf = calculate_future_tsf(received_tsf)
+
+                # Display received TSF in the GUI.
+                tsf_label.config(
+                    text=f"Received TSF: {received_tsf} us"
+                )
+
+                # Display calculated future TSF in the GUI.
+                future_label.config(
+                    text=f"Future TSF: {future_tsf} us"
+                )
+
+                # Update status.
+                status_label.config(
+                    text="Future TSF calculated successfully!"
+                )
+
+            except ValueError:
+
+                print("Invalid TSF timestamp received:", message)
+
+    # Run this function again after 50 milliseconds.
     root.after(50, update_gui)
 
 
-# Close application safely
+# ==========================================================
+# 6. CLOSE APPLICATION SAFELY
+# ==========================================================
+
 def close_application():
 
+    # Close serial connection before exiting.
     if esp32.is_open:
         esp32.close()
 
+    # Close GUI window.
     root.destroy()
 
 
-# Create GUI
-root = tk.Tk()
-root.title("ESP32 TSF Controller")
-root.geometry("400x250")
+# ==========================================================
+# 7. CREATE GUI WINDOW
+# ==========================================================
 
-# Title
+root = tk.Tk()
+
+root.title("ESP32 TSF Controller")
+
+root.geometry("550x350")
+
+
+# ==========================================================
+# 8. GUI TITLE
+# ==========================================================
+
 title_label = tk.Label(
     root,
     text="ESP32 TSF Controller",
-    font=("Arial", 16)
+    font=("Arial", 18, "bold")
 )
+
 title_label.pack(pady=20)
 
-# START button
+
+# ==========================================================
+# 9. START BUTTON
+# ==========================================================
+
 start_button = tk.Button(
     root,
     text="START",
     font=("Arial", 14),
+    width=15,
     command=start_button_clicked
 )
+
 start_button.pack(pady=10)
 
-# Status
+
+# ==========================================================
+# 10. STATUS DISPLAY
+# ==========================================================
+
 status_label = tk.Label(
     root,
-    text="Waiting...",
+    text="Waiting for START command...",
     font=("Arial", 11)
 )
+
 status_label.pack(pady=10)
 
-# TSF display
+
+# ==========================================================
+# 11. RECEIVED TSF DISPLAY
+# ==========================================================
+
 tsf_label = tk.Label(
     root,
-    text="TSF: Not received",
-    font=("Arial", 14, "bold")
+    text="Received TSF: Not received",
+    font=("Arial", 12)
 )
+
 tsf_label.pack(pady=10)
 
 
-# Start background serial receiver
+# ==========================================================
+# 12. FUTURE TSF DISPLAY
+# ==========================================================
+
+future_label = tk.Label(
+    root,
+    text="Future TSF: Not calculated",
+    font=("Arial", 12, "bold")
+)
+
+future_label.pack(pady=10)
+
+
+# ==========================================================
+# 13. START BACKGROUND SERIAL THREAD
+# ==========================================================
+
 receiver_thread = threading.Thread(
     target=serial_receiver,
     daemon=True
 )
+
 receiver_thread.start()
 
-# Start GUI serial-message polling
+
+# ==========================================================
+# 14. START GUI MESSAGE PROCESSING
+# ==========================================================
+
+# Check the queue every 50 milliseconds.
 root.after(50, update_gui)
 
-# Handle window closing
-root.protocol("WM_DELETE_WINDOW", close_application)
 
-# Run GUI
+# ==========================================================
+# 15. HANDLE WINDOW CLOSING
+# ==========================================================
+
+root.protocol(
+    "WM_DELETE_WINDOW",
+    close_application
+)
+
+
+# ==========================================================
+# 16. RUN GUI
+# ==========================================================
+
 root.mainloop()
