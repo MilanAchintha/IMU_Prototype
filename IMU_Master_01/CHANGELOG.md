@@ -1,3 +1,10 @@
+## [v1.0.0] - 2026-11-25 [Feature/make-new-python-for-no-data-loss-while-saving-csv-file]
+
+### Added
+
+- two devices check..afetr 2mins data loss
+- one device checked for 12mins,,confirm no data loss
+
 ## [v1.0.0] - 2026-11-23 [Feature/multiple-device-save-to-csv-message-id]
 
 ### Added
