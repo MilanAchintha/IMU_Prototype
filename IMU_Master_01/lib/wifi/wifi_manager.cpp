@@ -2,9 +2,10 @@
 #include "wifi_manager.h"
 #include <WiFi.h>
 
-static const char* WIFI_SSID = "MAB";
-static const char* WIFI_PASSWORD = "1234567890";
-
+static const char* WIFI_SSID = "SLT-Fiber-2.4G_2880";
+static const char* WIFI_PASSWORD = "coin6657";
+/*const char* ssid = "SLT-Fiber-2.4G_2880";
+const char* password = "coin6657";*/
 void wifi_init()
 {
     WiFi.mode(WIFI_STA);
