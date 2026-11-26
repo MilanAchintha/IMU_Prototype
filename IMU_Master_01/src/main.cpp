@@ -10,7 +10,7 @@ uint32_t failed_batches = 0;
 uint32_t successful_packets = 0;
 
 // Laptop's Wi-Fi IPv4 address
-#define SERVER_IP "192.168.1.4"
+#define SERVER_IP "192.168.43.19"
 
 #define SERVER_PORT 8080
 
