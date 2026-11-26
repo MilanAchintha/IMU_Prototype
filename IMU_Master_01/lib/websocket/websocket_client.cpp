@@ -38,10 +38,11 @@ void websocket_init(
 )
 {
     ws.begin(server_ip, server_port, "/");
+    // ws.enableHeartbeat(15000, 3000, 2);
 
     ws.onEvent(websocket_event);
 
-    ws.setReconnectInterval(3000);
+    ws.setReconnectInterval(1000);
 
     Serial.println("WebSocket client initialized");
 }

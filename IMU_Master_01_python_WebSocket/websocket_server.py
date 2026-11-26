@@ -36,7 +36,7 @@ WRITER_WAIT_TIME = 1.0
 
 device_stats = {}
 
-
+#Initialize statistics for every configured ESP32.
 def initialize_devices():
 
     for device_id in range(1, DEVICE_COUNT + 1):
@@ -338,6 +338,23 @@ def print_statistics():
     print("========================================\n")
 
 
+
+last_print_time = 0.0
+
+
+def maybe_print_statistics():
+
+    global last_print_time
+
+    now = time.time()
+
+    if now - last_print_time >= 5.0:
+
+        print_statistics()
+
+        last_print_time = now
+
+
 # ==================================================
 # 7. WEBSOCKET HANDLER
 # ==================================================
@@ -375,8 +392,6 @@ async def websocket_handler(websocket):
 
             batch_devices = set()
 
-            valid_packets = 0
-
             # Process all packets in the received batch.
             for i in range(BATCH_SIZE):
 
@@ -395,28 +410,18 @@ async def websocket_handler(websocket):
 
                 device_id, record = result
 
-                # Put the record into the central queue.
-                # If the queue is full, wait rather than
-                # silently discarding the record.
                 await data_queue.put((device_id, record))
 
                 batch_devices.add(device_id)
                 connection_devices.add(device_id)
-
-                valid_packets += 1
 
             # Count one batch for each device present.
             for device_id in batch_devices:
 
                 device_stats[device_id]["batches_received"] += 1
 
-            print(
-                f"Batch received from {client_address} | "
-                f"Valid packets: {valid_packets} | "
-                f"Devices: {sorted(batch_devices)}"
-            )
-
-            print_statistics()
+            # Prints only once every 5 seconds
+            maybe_print_statistics()
 
     except websockets.exceptions.ConnectionClosed as error:
 
@@ -431,7 +436,6 @@ async def websocket_handler(websocket):
         print("\nESP32 DISCONNECTED:", client_address)
 
         print("Devices seen on this connection:", connection_devices)
-
 
 # ==================================================
 # 8. MAIN SERVER
@@ -513,3 +517,5 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
 
         print("\nServer stopped by user.")
+
+

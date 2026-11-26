@@ -83,7 +83,7 @@ static void imu_generation_task(void *parameter)
         packet_create(&imu_data, packet);
 
         // Send packet to queue without waiting
-        if (xQueueSend(packet_queue, packet, 0) ==  pdPASS)
+        if (xQueueSend(packet_queue, packet, 0) == pdPASS)
         {
             sentCount++;
         }
@@ -106,14 +106,16 @@ bool imu_data_init()
         IMU_QUEUE_LENGTH,
         PACKET_SIZE);
 
-    // Create FreeRTOS task
-    BaseType_t result = xTaskCreate(
-        imu_generation_task,
-        "IMU_Generation",
-        IMU_TASK_STACK_SIZE,
-        NULL,
-        IMU_TASK_PRIORITY,
-        NULL);
+    // Create FreeRTOS task on Core 1
+    BaseType_t result = xTaskCreatePinnedToCore(
+        imu_generation_task, // Task function
+        "IMU_Generation",    // Task name
+        IMU_TASK_STACK_SIZE, // Stack size
+        NULL,                // Parameters
+        IMU_TASK_PRIORITY,   // Priority
+        NULL,                // Task handle
+        1                    // Core 1
+    );
 
     return true;
 }
