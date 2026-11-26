@@ -13,6 +13,9 @@ void wifi_init()
     WiFi.mode(WIFI_STA);
 
     WiFi.setSleep(false); // Normally, ESP32 Wi-Fi can enter a power-saving mode during periods of inactivity.
+    WiFi.setTxPower(WIFI_POWER_19_5dBm);     // maximum transmit power Controls how strongly the ESP32 transmits its Wi-Fi radio signal.
+    WiFi.setAutoReconnect(true);
+
 
     Serial.println("Connecting to WiFi...");
 

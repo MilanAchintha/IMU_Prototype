@@ -42,7 +42,7 @@ void websocket_init(
 
     ws.onEvent(websocket_event);
 
-    ws.setReconnectInterval(1000);
+    ws.setReconnectInterval(1000); // configured reconnect interval is 1 second
 
     Serial.println("WebSocket client initialized");
 }
