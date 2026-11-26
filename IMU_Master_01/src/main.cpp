@@ -14,6 +14,8 @@ uint32_t successful_packets = 0;
 
 #define SERVER_PORT 8080
 
+#define BATCH_SIZE 100
+
 void setup()
 {
     Serial.begin(115200);
@@ -31,7 +33,7 @@ void setup()
 void loop()
 {
     // Store 100 packets in one batch
-    static uint8_t batch_buffer[PACKET_SIZE * 100]; // static uint8_t batch_buffer[2400];
+    static uint8_t batch_buffer[PACKET_SIZE * BATCH_SIZE]; // static uint8_t batch_buffer[2400];
 
     // Number of packets collected so far
     static uint16_t batch_count = 0;
@@ -44,6 +46,9 @@ void loop()
     if (websocket_is_connected())
     {
         // Receive packets from FreeRTOS queue
+/*Try to get one packet from the queue.
+If a packet is available, execute the loop.
+If the queue is empty, stop the loop.*/
         while (packet_receive(packet))
         {
             // Calculate the position to store this packet
@@ -59,16 +64,16 @@ void loop()
             batch_count++;
 
             // Check whether 100 packets have been collected
-            if (batch_count >= 100)
+            if (batch_count >= BATCH_SIZE)
             {
                 // Send all 100 packets together
-                if (websocket_send_binary(
+                if (websocket_send_binary( // While this sending while condition is not executed..the data is collected to queue
                         batch_buffer,
                         sizeof(batch_buffer)))
                 {
                     // Serial.println("100 packets sent!");
                     successful_batches++;
-                    successful_packets += 100;
+                    successful_packets += BATCH_SIZE;
                 }
                 else
                 {

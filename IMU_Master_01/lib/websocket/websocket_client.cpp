@@ -76,7 +76,7 @@ bool websocket_send_binary(uint8_t* data, size_t length)
 {
     if (ws.isConnected())
     {
-        return ws.sendBIN(data, length);
+        return ws.sendBIN(data, length); // retirn true if the data was sent successfully, false otherwise
     }
 
     return false;
