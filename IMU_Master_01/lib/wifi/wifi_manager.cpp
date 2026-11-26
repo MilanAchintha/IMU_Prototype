@@ -12,7 +12,7 @@ void wifi_init()
 {
     WiFi.mode(WIFI_STA);
 
-    WiFi.setSleep(false);
+    WiFi.setSleep(false); // Normally, ESP32 Wi-Fi can enter a power-saving mode during periods of inactivity.
 
     Serial.println("Connecting to WiFi...");
 
