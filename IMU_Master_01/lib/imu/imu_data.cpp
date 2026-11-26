@@ -10,7 +10,7 @@
 
 // Configuration
 #define IMU_SAMPLE_INTERVAL 2
-#define IMU_QUEUE_LENGTH 1000
+#define IMU_QUEUE_LENGTH 3000
 #define IMU_TASK_STACK_SIZE 4096
 #define IMU_TASK_PRIORITY 5
 
