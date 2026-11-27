@@ -2,7 +2,7 @@
 
 #include "imu_data.h"
 #include "packet.h"
-#include "wifi_manager.h"
+#include "wifi_manager.h"   
 #include "websocket_client.h"
 
 uint32_t successful_batches = 0;
@@ -10,7 +10,7 @@ uint32_t failed_batches = 0;
 uint32_t successful_packets = 0;
 
 // Laptop's Wi-Fi IPv4 address
-#define SERVER_IP "192.168.1.4"
+#define SERVER_IP "192.168.43.19"
 
 #define SERVER_PORT 8080
 
@@ -36,7 +36,7 @@ void loop()
     static uint8_t batch_buffer[PACKET_SIZE * BATCH_SIZE];
 
     // Number of packets collected so far
-    static uint16_t batch_count = 0;
+    static uint16_t batch_count = 0;  // loop never setup
 
     uint8_t packet[PACKET_SIZE];
 
