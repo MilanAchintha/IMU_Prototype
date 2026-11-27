@@ -5,7 +5,7 @@ import threading
 import queue
 
 esp32 = serial.Serial(
-    port="COM5",
+    port="COM9",
     baudrate=115200,
     timeout=0.2
 )

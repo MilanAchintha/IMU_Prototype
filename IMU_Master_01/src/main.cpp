@@ -2,9 +2,18 @@
 #include <WiFi.h>
 #include <esp_wifi.h>
 
+// const char* WIFI_SSID = "Dialog 4G 856";
+// const char* WIFI_PASSWORD = "9ac026F1";
+
+// const char* WIFI_SSID = "MAB";
+// const char* WIFI_PASSWORD = "1234567890";
+
+// const char* WIFI_SSID = "SLT-Fiber-2.4G_2880";
+// const char* WIFI_PASSWORD = "coin6657";
+
 // Wi-Fi credentials
-const char* ssid = "MAB";
-const char* password = "1234567890";
+const char* ssid = "SLT-Fiber-2.4G_2880";
+const char* password = "coin6657";
 
 String receivedCommand = "";
 
